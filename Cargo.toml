@@ -3,8 +3,7 @@ resolver = "2"
 members = [
     "common",
     "create",
-    "daemon",
-    "test_client"
+    "daemon",    "test_client"
 ]
 
 [workspace.package]
