@@ -10,7 +10,7 @@ repository.workspace = true
 
 [dependencies]
 common.workspace = true
-kaswallet-proto.workspace = true
+proto.workspace = true
 
 kaspa-consensus-core.workspace = true
 
