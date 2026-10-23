@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -6,6 +7,17 @@ namespace KasWallet;
 
 public sealed class KaspaRestClient : IDisposable
 {
+    /// <summary>
+    /// Public Kaspa REST API. Transaction submit is POST <c>{DefaultBaseUrl}transactions</c>
+    /// (OpenAPI <c>SubmitTransactionRequest</c> on https://api.kaspa.org/openapi.json).
+    /// </summary>
+    public const string DefaultBaseUrl = "https://api.kaspa.org/";
+
+    public const string SubmitTransactionPath = "transactions";
+
+    /// <summary>Native subnetwork id (20 zero bytes), hex.</summary>
+    public const string NativeSubnetworkId = "0000000000000000000000000000000000000000";
+
     private readonly HttpClient _http;
     private readonly bool _ownsClient;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -17,7 +29,7 @@ public sealed class KaspaRestClient : IDisposable
     {
         if (httpClient is null)
         {
-            _http = new HttpClient { BaseAddress = new Uri(baseUrl ?? "https://api.kaspa.org/") };
+            _http = new HttpClient { BaseAddress = new Uri(baseUrl ?? DefaultBaseUrl) };
             _ownsClient = true;
         }
         else
@@ -63,6 +75,73 @@ public sealed class KaspaRestClient : IDisposable
         }).ToList();
     }
 
+    /// <summary>
+    /// Builds the JSON body for <c>POST /transactions</c>. Empty signature scripts
+    /// are sent as-is. Nodes reject those drafts; this is not a mainnet broadcast.
+    /// </summary>
+    public static string BuildSubmitJson(SignedTransactionDraft draft)
+    {
+        var payload = new
+        {
+            transaction = new
+            {
+                version = 0,
+                inputs = draft.Inputs.Select(input => new
+                {
+                    previousOutpoint = new
+                    {
+                        transactionId = input.TransactionId,
+                        index = input.Index
+                    },
+                    signatureScript = input.SignatureScriptHex ?? "",
+                    sequence = 0,
+                    sigOpCount = 1
+                }).ToArray(),
+                outputs = draft.Outputs.Select(output => new
+                {
+                    amount = output.AmountSompi,
+                    scriptPublicKey = new
+                    {
+                        version = 0,
+                        scriptPublicKey = output.ScriptPublicKeyHex
+                    }
+                }).ToArray(),
+                lockTime = 0,
+                subnetworkId = NativeSubnetworkId
+            },
+            allowOrphan = false
+        };
+        return JsonSerializer.Serialize(payload);
+    }
+
+    /// <summary>
+    /// POST <see cref="BuildSubmitJson"/> to <c>{baseUrl}/transactions</c>.
+    /// Default URL: https://api.kaspa.org/transactions.
+    /// Unsigned placeholder drafts are not consensus-valid; check <see cref="SubmitTransactionResult.Accepted"/>.
+    /// </summary>
+    public async Task<SubmitTransactionResult> SubmitTransactionAsync(SignedTransactionDraft draft, CancellationToken ct = default)
+    {
+        if (_http.BaseAddress is null)
+            throw new InvalidOperationException(
+                $"HttpClient.BaseAddress is required. Use {DefaultBaseUrl} so POST {SubmitTransactionPath} hits {DefaultBaseUrl}{SubmitTransactionPath}.");
+
+        var json = BuildSubmitJson(draft);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await _http.PostAsync(SubmitTransactionPath, content, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        SubmitResponseDto? dto = null;
+        try
+        {
+            dto = JsonSerializer.Deserialize<SubmitResponseDto>(body, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            // Non-JSON error pages are returned in RawBody.
+        }
+
+        return new SubmitTransactionResult((int)response.StatusCode, dto?.TransactionId, dto?.Error, body);
+    }
+
     public void Dispose()
     {
         if (_ownsClient)
@@ -94,5 +173,11 @@ public sealed class KaspaRestClient : IDisposable
         [JsonPropertyName("amount")] public long Amount { get; set; }
         [JsonPropertyName("isCoinbase")] public bool IsCoinbase { get; set; }
         [JsonPropertyName("blockDaaScore")] public ulong? BlockDaaScore { get; set; }
+    }
+
+    private sealed class SubmitResponseDto
+    {
+        [JsonPropertyName("transactionId")] public string? TransactionId { get; set; }
+        [JsonPropertyName("error")] public string? Error { get; set; }
     }
 }

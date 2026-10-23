@@ -1,53 +1,64 @@
 namespace KasWallet;
 
 /// <summary>
-/// Lightweight Kaspa bech32 address checks (prefix + charset + structure).
-/// Full Schnorr payload decode is tracked for a later milestone.
+/// Kaspa address checks: known prefix, bech32 charset, 40-bit checksum, and
+/// standard version/payload length (Schnorr P2PK is version 0 + 32 bytes).
 /// </summary>
 public static class AddressValidator
 {
-    private const string Bech32Charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+    public static bool IsValid(string? address) => Check(address) == AddressCheck.Valid;
 
-    public static bool IsValid(string? address)
+    public static AddressCheck Check(string? address)
     {
-        if (string.IsNullOrWhiteSpace(address))
-            return false;
+        if (!TryPrefix(address, out var prefix))
+            return AddressCheck.Malformed;
+        if (!KaspaNetworks.IsKnownPrefix(prefix))
+            return AddressCheck.Malformed;
 
-        var parts = address.Split(':', 2);
-        if (parts.Length != 2)
-            return false;
-
-        var prefix = parts[0];
-        var data = parts[1];
-        if (prefix is not ("kaspa" or "kaspatest" or "kaspadev" or "kaspasim"))
-            return false;
-        if (data.Length < 8 || data.Length > 120)
-            return false;
-
-        foreach (var c in data)
+        var status = KaspaBech32.Decode(address, out _);
+        return status switch
         {
-            if (Bech32Charset.IndexOf(c) < 0)
-                return false;
-        }
+            KaspaBech32Status.Ok => AddressCheck.Valid,
+            KaspaBech32Status.BadChecksum => AddressCheck.BadChecksum,
+            KaspaBech32Status.BadPayload => AddressCheck.BadPayload,
+            _ => AddressCheck.Malformed
+        };
+    }
 
-        return true;
+    public static bool TryDecode(string? address, out KaspaAddressInfo info)
+    {
+        info = default;
+        if (Check(address) != AddressCheck.Valid)
+            return false;
+        return KaspaBech32.Decode(address, out info) == KaspaBech32Status.Ok;
     }
 
     public static bool TryDetectNetwork(string address, out KaspaNetwork network)
     {
         network = default;
-        if (!IsValid(address))
+        if (!TryDecode(address, out var info))
             return false;
+        return KaspaNetworks.TryFromPrefix(info.Prefix, out network);
+    }
 
-        var prefix = address.Split(':', 2)[0];
-        network = prefix switch
-        {
-            "kaspa" => KaspaNetwork.Mainnet,
-            "kaspatest" => KaspaNetwork.Testnet10,
-            "kaspadev" => KaspaNetwork.Devnet,
-            "kaspasim" => KaspaNetwork.Simnet,
-            _ => default
-        };
+    private static bool TryPrefix(string? address, out string prefix)
+    {
+        prefix = "";
+        if (string.IsNullOrWhiteSpace(address))
+            return false;
+        address = address.Trim();
+        var colon = address.IndexOf(':');
+        if (colon <= 0)
+            return false;
+        prefix = address[..colon];
         return true;
     }
+}
+
+public enum AddressCheck
+{
+    Valid,
+    Malformed,
+    BadChecksum,
+    BadPayload
 }
