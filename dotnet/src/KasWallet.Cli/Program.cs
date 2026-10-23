@@ -1,6 +1,8 @@
 using System.CommandLine;
+using System.Security.Cryptography;
 using System.Text.Json;
 using KasWallet;
+using KasWallet.Core.Consensus;
 
 static void Warn()
 {
@@ -227,4 +229,79 @@ buildCmd.SetHandler(async (string from, string to, decimal amount, decimal fee, 
 }, fromOpt, toOpt, amountOpt, feeOpt, buildApiOpt, buildMnemonicOpt, changeIndexOpt);
 root.AddCommand(buildCmd);
 
+var sendFromKey = new Option<string>("--from-key", "Hex private key (32 bytes), or a BIP39 mnemonic spent from receive index 0") { IsRequired = true };
+var sendTo = new Option<string>("--to", "Destination address") { IsRequired = true };
+var sendAmount = new Option<long>("--amount", "Amount in sompi") { IsRequired = true };
+var sendFee = new Option<long>("--fee", "Fee in sompi") { IsRequired = true };
+var sendApi = new Option<string?>("--api", $"REST base URL (default {KaspaRestClient.DefaultBaseUrl}, testnet-10 {KaspaRestClient.Testnet10BaseUrl})");
+var sendBroadcast = new Option<bool>("--broadcast", "POST the signed transaction. Omit to print JSON and not broadcast.");
+var sendCmd = new Command("send", "Build a signed payment. Dry-run unless --broadcast is set.");
+sendCmd.AddOption(sendFromKey);
+sendCmd.AddOption(sendTo);
+sendCmd.AddOption(sendAmount);
+sendCmd.AddOption(sendFee);
+sendCmd.AddOption(sendApi);
+sendCmd.AddOption(sendBroadcast);
+sendCmd.SetHandler(async (string fromKey, string to, long amount, long fee, string? api, bool broadcast) =>
+{
+    Warn();
+    byte[]? key = null;
+    try
+    {
+        key = ConsensusTransactionFactory.SigningKeyFrom(fromKey, ResolvePassphrase(null));
+        if (!AddressValidator.TryDetectNetwork(to, out var network))
+            throw new ArgumentException("Invalid --to address.");
+
+        var fromAddress = ConsensusTransactionFactory.AddressFromPrivateKey(key, network);
+        Console.Error.WriteLine($"from={fromAddress}");
+        using var client = new KaspaRestClient(api);
+        var utxos = await client.GetUtxosAsync(fromAddress);
+        var tx = ConsensusTransactionFactory.Build(utxos, to, amount, fee, fromAddress, key);
+        var json = TransactionJson.ToRestSubmitJson(tx);
+        Console.WriteLine(json);
+        if (!broadcast)
+        {
+            Console.Error.WriteLine("dry-run: not broadcast (pass --broadcast to POST)");
+            return;
+        }
+
+        var responseBody = await client.SubmitTransactionAsync(json);
+        Console.WriteLine(responseBody);
+        if (!SubmitLooksAccepted(responseBody))
+            Environment.ExitCode = 1;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine(ex.Message);
+        Environment.ExitCode = 1;
+    }
+    finally
+    {
+        if (key is not null)
+            CryptographicOperations.ZeroMemory(key);
+    }
+}, sendFromKey, sendTo, sendAmount, sendFee, sendApi, sendBroadcast);
+root.AddCommand(sendCmd);
+
 return await root.InvokeAsync(args);
+
+static bool SubmitLooksAccepted(string body)
+{
+    try
+    {
+        using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            return false;
+        if (doc.RootElement.TryGetProperty("error", out var error) &&
+            error.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined &&
+            !(error.ValueKind == JsonValueKind.String && string.IsNullOrEmpty(error.GetString())))
+            return false;
+        return doc.RootElement.TryGetProperty("transactionId", out var id) &&
+               id.ValueKind == JsonValueKind.String &&
+               !string.IsNullOrEmpty(id.GetString());
+    }
+    catch (JsonException)
+    {
+        return false;
+    }
+}
