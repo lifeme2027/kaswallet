@@ -3,7 +3,8 @@ using NBitcoin;
 namespace KasWallet;
 
 /// <summary>
-/// BIP39 mnemonics. Kaspa commonly uses BIP44 coin type 111111 (documented; address encoding TBD).
+/// BIP39 mnemonics. Account root is BIP44 coin type 111111 (m/44'/111111'/0').
+/// Receive addresses continue at m/44'/111111'/0'/0/{index}; see <see cref="SchnorrAddress"/>.
 /// </summary>
 public static class MnemonicService
 {

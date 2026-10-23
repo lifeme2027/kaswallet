@@ -18,5 +18,11 @@ public sealed class WalletService : IDisposable
     public Task<IReadOnlyList<UtxoEntry>> GetUtxosAsync(string address, CancellationToken ct = default)
         => _rpc.GetUtxosAsync(address, ct);
 
+    public string GenerateReceiveAddress(string mnemonic, int index = 0, string? passphrase = null)
+        => GenerateReceiveAddress(mnemonic, index, Network, passphrase);
+
+    public static string GenerateReceiveAddress(string mnemonic, int index, KaspaNetwork network, string? passphrase = null)
+        => SchnorrAddress.GenerateReceiveAddress(mnemonic, index, network, passphrase);
+
     public void Dispose() => _rpc.Dispose();
 }
