@@ -1,5 +1,23 @@
 # kaswallet
 
+Fork of [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet) maintained by [composehk](https://github.com/composehk).
+
+## C# / .NET 8 port (new)
+
+仓库名保持原开源项目名 **kaswallet**。C# 改造在 [`dotnet/`](./dotnet/)：
+
+- `KasWallet.Core`：地址校验、REST 余额/UTXO、BIP39、未签名交易草稿
+- `KasWallet.Cli`：CLI（程序集名 `kaswallet`）
+- 构建：`cd dotnet && dotnet build && dotnet test`
+
+详见 [dotnet/README.md](./dotnet/README.md)。**pre-alpha**，请勿用于真实资金。
+
+---
+
+## Upstream Rust README
+
+# kaswallet
+
 A gRPC-based Kaspa wallet daemon and cli client.
 
 ## Warning

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>KasWallet</RootNamespace>
+    <AssemblyName>KasWallet.Core</AssemblyName>
+    <Description>kaswallet .NET core library — C# port inspired by IgraLabs/kaswallet</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NBitcoin" Version="7.0.50" />
+  </ItemGroup>
+</Project>
