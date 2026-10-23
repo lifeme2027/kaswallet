@@ -13,6 +13,9 @@ public sealed class KaspaRestClient : IDisposable
     /// </summary>
     public const string DefaultBaseUrl = "https://api.kaspa.org/";
 
+    /// <summary>Public testnet-10 REST API. Example: <c>https://api-tn10.kaspa.org</c>.</summary>
+    public const string Testnet10BaseUrl = "https://api-tn10.kaspa.org/";
+
     public const string SubmitTransactionPath = "transactions";
 
     /// <summary>Native subnetwork id (20 zero bytes), hex.</summary>
@@ -29,16 +32,26 @@ public sealed class KaspaRestClient : IDisposable
     {
         if (httpClient is null)
         {
-            _http = new HttpClient { BaseAddress = new Uri(baseUrl ?? DefaultBaseUrl) };
+            _http = new HttpClient { BaseAddress = NormalizeBaseUrl(baseUrl ?? DefaultBaseUrl) };
             _ownsClient = true;
         }
         else
         {
             _http = httpClient;
             if (_http.BaseAddress is null && baseUrl is not null)
-                _http.BaseAddress = new Uri(baseUrl);
+                _http.BaseAddress = NormalizeBaseUrl(baseUrl);
             _ownsClient = false;
         }
+    }
+
+    private static Uri NormalizeBaseUrl(string url)
+    {
+        var trimmed = url.Trim();
+        if (trimmed.Length == 0)
+            throw new ArgumentException("Base URL is required.", nameof(url));
+        if (!trimmed.EndsWith('/'))
+            trimmed += "/";
+        return new Uri(trimmed, UriKind.Absolute);
     }
 
     public async Task<AddressBalance> GetBalanceAsync(string address, CancellationToken ct = default)
@@ -140,6 +153,22 @@ public sealed class KaspaRestClient : IDisposable
         }
 
         return new SubmitTransactionResult((int)response.StatusCode, dto?.TransactionId, dto?.Error, body);
+    }
+
+    /// <summary>
+    /// POST <paramref name="json"/> to <c>{baseUrl}/transactions</c> and return the response body.
+    /// </summary>
+    public async Task<string> SubmitTransactionAsync(string json, CancellationToken ct = default)
+    {
+        if (json is null)
+            throw new ArgumentNullException(nameof(json));
+        if (_http.BaseAddress is null)
+            throw new InvalidOperationException(
+                $"HttpClient.BaseAddress is required. Use {DefaultBaseUrl} so POST {SubmitTransactionPath} hits {DefaultBaseUrl}{SubmitTransactionPath}.");
+
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var response = await _http.PostAsync(SubmitTransactionPath, content, ct);
+        return await response.Content.ReadAsStringAsync(ct);
     }
 
     public void Dispose()

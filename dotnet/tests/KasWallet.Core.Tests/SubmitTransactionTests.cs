@@ -39,6 +39,35 @@ public class SubmitTransactionTests
         Assert.Equal(new Uri("http://127.0.0.1:16710/transactions"), handler.RequestUri);
     }
 
+    [Fact]
+    public async Task Submit_string_posts_json_and_returns_the_response_body()
+    {
+        var handler = new CaptureHandler("{\"transactionId\":\"zzz\"}", HttpStatusCode.OK);
+        using var http = new HttpClient(handler);
+        using var client = new KaspaRestClient("https://api-tn10.kaspa.org", http);
+        const string json = "{\"transaction\":{},\"allowOrphan\":false}";
+
+        var body = await client.SubmitTransactionAsync(json);
+
+        Assert.Equal("{\"transactionId\":\"zzz\"}", body);
+        Assert.Equal(json, handler.Body);
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        Assert.Equal(new Uri("https://api-tn10.kaspa.org/transactions"), handler.RequestUri);
+    }
+
+    [Fact]
+    public async Task Submit_string_returns_error_body()
+    {
+        var handler = new CaptureHandler("{\"error\":\"rejected\"}", HttpStatusCode.BadRequest);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri(KaspaRestClient.Testnet10BaseUrl) };
+        using var client = new KaspaRestClient(httpClient: http);
+
+        var body = await client.SubmitTransactionAsync("{}");
+
+        Assert.Equal("{\"error\":\"rejected\"}", body);
+        Assert.Equal(new Uri("https://api-tn10.kaspa.org/transactions"), handler.RequestUri);
+    }
+
     private static SignedTransactionDraft SampleDraft()
     {
         var address = "kaspa:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkx9awp4e";
@@ -64,11 +93,13 @@ public class SubmitTransactionTests
         }
 
         public Uri? RequestUri { get; private set; }
+        public HttpMethod? Method { get; private set; }
         public string Body { get; private set; } = "";
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             RequestUri = request.RequestUri;
+            Method = request.Method;
             Body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
             return new HttpResponseMessage(_status)
             {
