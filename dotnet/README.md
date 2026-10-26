@@ -1,5 +1,7 @@
 # kaswallet (.NET / C#)
 
+[![dotnet](https://github.com/composehk/kaswallet/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/composehk/kaswallet/actions/workflows/dotnet.yml)
+
 基于 [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet) 的 **C# / .NET 8** 改造与演进。仓库名保持原开源项目名 **kaswallet**（fork：[`composehk/kaswallet`](https://github.com/composehk/kaswallet)）。
 
 > **状态**：Schnorr 收款地址、共识 sighash 与 BIP-340 签名、REST 提交、`send` 命令（默认 dry-run，`--broadcast` 才会提交）均已实现。新增交易质量（mass）计算（compute / transient / KIP-9 storage mass，移植自 rusty-kaspa `consensus/core/src/mass`，测试复现了上游官方向量）与按质量估算手续费：`fee = mass × fee-rate`，最低 100 sompi/gram。目前仅支持 version-0 交易与 Schnorr P2PK。仍是 pre-alpha，请勿用于主网真实资金。
@@ -72,3 +74,7 @@ dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to
 ## 许可
 
 ISC — 见 `LICENSE` 与 `NOTICE.md`。
+
+## CI
+
+本 fork 只启用 `.github/workflows/dotnet.yml`（GitHub 托管 ubuntu-latest，.NET 8 build + test）。上游 Rust/Docker 工作流依赖 IgraLabs 的自托管 runner（`[self-hosted, kaswallet]`），在 fork 上会一直排队，因此已在本仓 Actions 设置里停用（`gh workflow disable`），文件本身保持与上游一致，便于同步。
