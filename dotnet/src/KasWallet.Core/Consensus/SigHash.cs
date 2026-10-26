@@ -11,6 +11,7 @@ public static class SigHash
 
     private static readonly byte[] SigningKey = "TransactionSigningHash"u8.ToArray();
     private static readonly byte[] TransactionIdKey = "TransactionID"u8.ToArray();
+    private static readonly byte[] TransactionHashKey = "TransactionHash"u8.ToArray();
 
     public static byte[] CalcSchnorrSignatureHash(Transaction tx, int inputIndex, UtxoEntry utxo)
     {
@@ -68,6 +69,41 @@ public static class SigHash
         body.U64(tx.Gas);
         body.VarBytes(tx.Payload);
         return Blake2b.Hash256(body.AsSpan(), TransactionIdKey);
+    }
+
+    /// <summary>
+    /// Transaction hash (not the id): commits to signature scripts, sigop counts and,
+    /// when non-zero, the storage mass. Version 0 transactions only.
+    /// </summary>
+    public static byte[] TransactionHash(Transaction tx, ulong storageMass = 0)
+    {
+        if (tx is null)
+            throw new ArgumentNullException(nameof(tx));
+        if (tx.Version != 0)
+            throw new NotSupportedException("Only version 0 transactions are supported.");
+
+        var body = new Writer();
+        body.U16(tx.Version);
+        body.U64((ulong)tx.Inputs.Count);
+        foreach (var input in tx.Inputs)
+        {
+            body.Outpoint(input.PreviousOutpoint);
+            body.VarBytes(input.SignatureScript);
+            body.U8(input.SigOpCount);
+            body.U64(input.Sequence);
+        }
+
+        body.U64((ulong)tx.Outputs.Count);
+        foreach (var output in tx.Outputs)
+            body.Output(output);
+
+        body.U64(tx.LockTime);
+        body.Raw(tx.SubnetworkId);
+        body.U64(tx.Gas);
+        body.VarBytes(tx.Payload);
+        if (storageMass > 0)
+            body.U64(storageMass);
+        return Blake2b.Hash256(body.AsSpan(), TransactionHashKey);
     }
 
     private static byte[] PreviousOutputsHash(Transaction tx)
