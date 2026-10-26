@@ -1,3 +1,10 @@
 [default.extend-words]
 # "daa" = Directed Acyclic graph Adjusted score, a Kaspa blockchain concept
 daa = "daa"
+
+[default]
+# bech32 addresses and hex pubkey prefixes in dotnet/ test vectors are not prose
+extend-ignore-re = [
+  "kaspa(test|dev|sim)?:[a-z0-9]{20,}",
+  "\\b02ba01fc\\b",
+]
