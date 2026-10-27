@@ -1,8 +1,8 @@
 # kaswallet (.NET / C#)
 
-[![dotnet](https://github.com/composehk/kaswallet/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/composehk/kaswallet/actions/workflows/dotnet.yml)
+[![dotnet](https://github.com/lifeme2027/kaswallet/actions/workflows/dotnet.yml/badge.svg?branch=main)](https://github.com/lifeme2027/kaswallet/actions/workflows/dotnet.yml)
 
-基于 [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet) 的 **C# / .NET 8** 改造与演进。仓库名保持原开源项目名 **kaswallet**（fork：[`composehk/kaswallet`](https://github.com/composehk/kaswallet)）。
+基于 [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet) 的 **C# / .NET 8** 改造与演进。仓库名保持原开源项目名 **kaswallet**（fork：[`lifeme2027/kaswallet`](https://github.com/lifeme2027/kaswallet)）。
 
 > **状态**：Schnorr 收款地址、共识 sighash 与 BIP-340 签名、REST 提交、`send` 命令（默认 dry-run，`--broadcast` 才会提交）均已实现。新增交易质量（mass）计算（compute / transient / KIP-9 storage mass，移植自 rusty-kaspa `consensus/core/src/mass`，测试复现了上游官方向量）与按质量估算手续费：`fee = mass × fee-rate`，最低 100 sompi/gram。目前仅支持 version-0 交易与 Schnorr P2PK。仍是 pre-alpha，请勿用于主网真实资金。
 
