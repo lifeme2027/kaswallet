@@ -1,5 +1,12 @@
 # kaswallet
 
+> **Notice / 说明**
+>
+> - This repository is derived from the upstream [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet). For privacy/security reasons, the upstream `dump-mnemonics` tool (which prints decrypted mnemonics) has been removed from this repository, including from its history; as a result, commit SHAs differ from upstream. The upstream LICENSE is retained.
+> - The .NET port lives under [`dotnet/`](./dotnet/). It is pre-alpha software, is not investment advice, and makes no promise of any returns.
+> - 本仓库派生自上游 [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet)。出于隐私/安全考虑，已移除上游的 `dump-mnemonics` 工具（它会打印解密后的助记词），历史中也已清除，因此提交 SHA 与上游不同；保留上游 LICENSE。
+> - .NET 移植位于 [`dotnet/`](./dotnet/)，为 pre-alpha，不构成投资建议，不承诺任何收益。
+
 Fork of [IgraLabs/kaswallet](https://github.com/IgraLabs/kaswallet) maintained by [composehk](https://github.com/composehk).
 
 ## C# / .NET 8 port (new)
