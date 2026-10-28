@@ -52,11 +52,14 @@ dotnet run --project src/KasWallet.Cli -- balance 'kaspa:q...'
 # dry-run：打印已签名交易 JSON（stdout），mass / fee 摘要在 stderr
 dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to 'kaspatest:q...' \
   --amount 500000000 --api https://api-tn10.kaspa.org/ [--fee-rate 100] [--fee <sompi>] [--broadcast]
+# 或发送全部余额（扣除手续费，无找零）：
+dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to 'kaspatest:q...' --all --api https://api-tn10.kaspa.org/
 ```
 
 - `--fee-rate`：sompi/gram，默认且不得低于 100（网络最低）。手续费 = 归一化最大质量 × 费率。
 - 质量取 compute、transient（归一化后为 2/字节）、storage（KIP-9，C = 10^12）三者的最大值；小额输出或过小的找零会使 storage mass 很大，手续费随之升高，超过标准上限 100000 时拒绝构建。
 - `--fee`：显式固定手续费（sompi），覆盖估算；若低于 mass × 费率会在输出中给出 warning。
+- `--all`：代替 `--amount`，把可花费余额（扣除手续费）一次发到 `--to`，没有找零输出。UTXO 从大到小选取，达到标准质量上限（100000）后停止；价值低于其自身所增加手续费的小额 UTXO 会被跳过。未花费的 UTXO 数量与总额会在 stderr 以 `sweep_leftover_inputs` / `sweep_leftover_sompi` 报告，待本笔确认后可再运行一次。`--all` 与 `--amount` 互斥。
 - 输出（stderr）：`mass`、`mass_compute`、`mass_transient`、`mass_storage`、`fee_rate`、`fee_sompi`、`fee_kas`、`change_sompi`。
 
 ## 路线图
@@ -67,6 +70,7 @@ dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to
 - [x] 未签名支付草稿（UTXO 选择、派生找零地址、可 JSON 序列化）
 - [x] Kaspa 共识 sighash 签名与 BIP-340 输入签名
 - [x] 交易质量（mass）计算与按质量估算手续费（`send --fee-rate`）
+- [x] `send --all`：一次性清扫余额（无找零，受标准质量上限约束）
 - [ ] 主网安全的广播（`send --broadcast` 已可用于 testnet-10，主网尚未验证）
 - [ ] gRPC（对齐上游 daemon）
 - [ ] keys.json 兼容与批量发送

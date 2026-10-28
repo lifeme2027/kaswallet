@@ -11,7 +11,8 @@ public sealed record SendOptions(
     long? FixedFeeSompi,
     ulong FeeRate,
     bool Broadcast,
-    string? Passphrase = null);
+    string? Passphrase = null,
+    bool SweepAll = false);
 
 /// <summary>Implementation of <c>kaswallet send</c>. stdout carries the submit JSON, stderr the diagnostics.</summary>
 public static class SendCommand
@@ -29,6 +30,8 @@ public static class SendCommand
         {
             if (options.FixedFeeSompi is < 0)
                 throw new ArgumentException("--fee must be >= 0.");
+            if (options.SweepAll && options.AmountSompi != 0)
+                throw new ArgumentException("--all cannot be combined with --amount.");
             key = ConsensusTransactionFactory.SigningKeyFrom(options.FromKey, options.Passphrase);
             if (!AddressValidator.TryDetectNetwork(options.To, out var network))
                 throw new ArgumentException("Invalid --to address.");
@@ -37,19 +40,40 @@ public static class SendCommand
             stderr.WriteLine($"from={fromAddress}");
             using var client = new KaspaRestClient(api, http);
             var utxos = await client.GetUtxosAsync(fromAddress);
-            var built = ConsensusTransactionFactory.BuildWithFeeRate(
-                utxos,
-                options.To,
-                options.AmountSompi,
-                fromAddress,
-                key,
-                options.FeeRate,
-                options.FixedFeeSompi is { } fixedFee ? (ulong)fixedFee : null);
+            var feeOverride = options.FixedFeeSompi is { } fixedFee ? (ulong)fixedFee : (ulong?)null;
+            SweepResult? sweep = null;
+            BuiltTransaction built;
+            if (options.SweepAll)
+            {
+                sweep = ConsensusTransactionFactory.BuildSweep(utxos, options.To, key, options.FeeRate, feeOverride);
+                built = sweep.Built;
+            }
+            else
+            {
+                built = ConsensusTransactionFactory.BuildWithFeeRate(
+                    utxos,
+                    options.To,
+                    options.AmountSompi,
+                    fromAddress,
+                    key,
+                    options.FeeRate,
+                    feeOverride);
+            }
 
             var json = TransactionJson.ToRestSubmitJson(built.Transaction);
             stdout.WriteLine(json);
             foreach (var line in FeeReport.Lines(built))
                 stderr.WriteLine(line);
+            if (sweep is not null)
+            {
+                stderr.WriteLine($"sweep_sent_sompi={sweep.SentSompi}");
+                stderr.WriteLine($"sweep_inputs={sweep.InputsUsed}");
+                stderr.WriteLine($"sweep_leftover_inputs={sweep.LeftoverInputs}");
+                stderr.WriteLine($"sweep_leftover_sompi={sweep.LeftoverSompi}");
+                if (sweep.LeftoverInputs > 0)
+                    stderr.WriteLine("note=some UTXOs did not fit into one transaction or were not worth their fee; run again after this one confirms to sweep the rest");
+            }
+
             if (!options.Broadcast)
             {
                 stderr.WriteLine("dry-run: not broadcast (pass --broadcast to POST)");

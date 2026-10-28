@@ -232,7 +232,8 @@ root.AddCommand(buildCmd);
 
 var sendFromKey = new Option<string>("--from-key", "Hex private key (32 bytes), or a BIP39 mnemonic spent from receive index 0") { IsRequired = true };
 var sendTo = new Option<string>("--to", "Destination address") { IsRequired = true };
-var sendAmount = new Option<long>("--amount", "Amount in sompi") { IsRequired = true };
+var sendAmount = new Option<long?>("--amount", "Amount in sompi (required unless --all)");
+var sendAll = new Option<bool>("--all", "Send the whole balance (minus fee) in one transaction with no change; instead of --amount");
 var sendFee = new Option<long?>("--fee", "Fixed fee in sompi (overrides --fee-rate; default: estimate from transaction mass)");
 var sendFeeRate = new Option<ulong>("--fee-rate", () => MassCalculator.MinimumFeeRate, $"Fee rate in sompi per gram of mass (default and minimum {MassCalculator.MinimumFeeRate})");
 var sendApi = new Option<string?>("--api", $"REST base URL (default {KaspaRestClient.DefaultBaseUrl}, testnet-10 {KaspaRestClient.Testnet10BaseUrl})");
@@ -241,19 +242,27 @@ var sendCmd = new Command("send", "Build a signed payment with a mass-based fee.
 sendCmd.AddOption(sendFromKey);
 sendCmd.AddOption(sendTo);
 sendCmd.AddOption(sendAmount);
+sendCmd.AddOption(sendAll);
 sendCmd.AddOption(sendFee);
 sendCmd.AddOption(sendFeeRate);
 sendCmd.AddOption(sendApi);
 sendCmd.AddOption(sendBroadcast);
-sendCmd.SetHandler(async (string fromKey, string to, long amount, long? fee, ulong feeRate, string? api, bool broadcast) =>
+sendCmd.SetHandler(async (string fromKey, string to, long? amount, bool all, long? fee, ulong feeRate, string? api, bool broadcast) =>
 {
     Warn();
+    if (all == amount.HasValue)
+    {
+        Console.Error.WriteLine("Specify exactly one of --amount <sompi> or --all.");
+        Environment.ExitCode = 1;
+        return;
+    }
+
     Environment.ExitCode = await SendCommand.RunAsync(
-        new SendOptions(fromKey, to, amount, fee, feeRate, broadcast, ResolvePassphrase(null)),
+        new SendOptions(fromKey, to, amount ?? 0, fee, feeRate, broadcast, ResolvePassphrase(null), all),
         api,
         Console.Out,
         Console.Error);
-}, sendFromKey, sendTo, sendAmount, sendFee, sendFeeRate, sendApi, sendBroadcast);
+}, sendFromKey, sendTo, sendAmount, sendAll, sendFee, sendFeeRate, sendApi, sendBroadcast);
 root.AddCommand(sendCmd);
 
 return await root.InvokeAsync(args);
