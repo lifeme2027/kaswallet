@@ -5,7 +5,7 @@ namespace KasWallet.Core.Consensus;
 /// <summary>
 /// Builds and signs a version-0 native payment from REST UTXOs.
 /// </summary>
-public static class ConsensusTransactionFactory
+public static partial class ConsensusTransactionFactory
 {
     public static Transaction Build(
         IReadOnlyList<KasWallet.UtxoEntry> availableUtxos,
