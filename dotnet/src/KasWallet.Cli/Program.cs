@@ -270,18 +270,18 @@ sendCmd.SetHandler(async (System.CommandLine.Invocation.InvocationContext ctx) =
     catch (ArgumentException ex)
     {
         Console.Error.WriteLine(ex.Message);
-        Environment.ExitCode = 1;
+        ctx.ExitCode = 1;
         return;
     }
 
     if (all == amount.HasValue)
     {
         Console.Error.WriteLine("Specify exactly one of --amount <sompi> or --all.");
-        Environment.ExitCode = 1;
+        ctx.ExitCode = 1;
         return;
     }
 
-    Environment.ExitCode = await SendCommand.RunAsync(
+    ctx.ExitCode = await SendCommand.RunAsync(
         new SendOptions(fromKey, to, amount ?? 0, fee, feeRate, broadcast, ResolvePassphrase(null), all, strategy),
         api,
         Console.Out,
