@@ -12,7 +12,8 @@ public sealed record SendOptions(
     ulong FeeRate,
     bool Broadcast,
     string? Passphrase = null,
-    bool SweepAll = false);
+    bool SweepAll = false,
+    CoinSelectionStrategy CoinSelection = CoinSelectionStrategy.LargestFirst);
 
 /// <summary>Implementation of <c>kaswallet send</c>. stdout carries the submit JSON, stderr the diagnostics.</summary>
 public static class SendCommand
@@ -32,6 +33,8 @@ public static class SendCommand
                 throw new ArgumentException("--fee must be >= 0.");
             if (options.SweepAll && options.AmountSompi != 0)
                 throw new ArgumentException("--all cannot be combined with --amount.");
+            if (options.SweepAll && options.CoinSelection != CoinSelectionStrategy.LargestFirst)
+                throw new ArgumentException("--coin-selection does not apply to --all (a sweep spends every UTXO it can).");
             key = ConsensusTransactionFactory.SigningKeyFrom(options.FromKey, options.Passphrase);
             if (!AddressValidator.TryDetectNetwork(options.To, out var network))
                 throw new ArgumentException("Invalid --to address.");
@@ -57,13 +60,19 @@ public static class SendCommand
                     fromAddress,
                     key,
                     options.FeeRate,
-                    feeOverride);
+                    feeOverride,
+                    options.CoinSelection);
             }
 
             var json = TransactionJson.ToRestSubmitJson(built.Transaction);
             stdout.WriteLine(json);
             foreach (var line in FeeReport.Lines(built))
                 stderr.WriteLine(line);
+            if (!options.SweepAll)
+            {
+                stderr.WriteLine($"coin_selection={(options.CoinSelection == CoinSelectionStrategy.SmallestFirst ? "smallest-first" : "largest-first")}");
+                stderr.WriteLine($"inputs={built.Transaction.Inputs.Count}");
+            }
             if (sweep is not null)
             {
                 stderr.WriteLine($"sweep_sent_sompi={sweep.SentSompi}");
@@ -94,6 +103,19 @@ public static class SendCommand
             if (key is not null)
                 CryptographicOperations.ZeroMemory(key);
         }
+    }
+
+    /// <summary>Parses <c>largest-first</c> / <c>smallest-first</c> (case-insensitive).</summary>
+    public static CoinSelectionStrategy ParseCoinSelection(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return CoinSelectionStrategy.LargestFirst;
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "largest-first" or "largest" => CoinSelectionStrategy.LargestFirst,
+            "smallest-first" or "smallest" => CoinSelectionStrategy.SmallestFirst,
+            _ => throw new ArgumentException($"Unknown --coin-selection '{value}'. Use largest-first or smallest-first."),
+        };
     }
 
     public static bool SubmitLooksAccepted(string body)

@@ -85,10 +85,15 @@ public static partial class ConsensusTransactionFactory
     /// <summary>
     /// Builds and signs a payment whose fee is <c>mass * feeRate</c> (sompi per gram), where mass is the
     /// normalized maximum of compute, transient and storage mass (<see cref="MassCalculator"/>).
-    /// Inputs are added largest-first until the amount plus its own fee is covered.
+    /// Inputs are added in <paramref name="coinSelection"/> order (largest-first by default)
+    /// until the amount plus its own fee is covered.
     /// </summary>
     /// <param name="feeRate">Sompi per gram; defaults to the network minimum.</param>
     /// <param name="feeOverrideSompi">When set, pays exactly this fee instead of mass * rate (mass is still reported).</param>
+    /// <param name="coinSelection">
+    /// <see cref="CoinSelectionStrategy.LargestFirst"/> uses the fewest inputs.
+    /// <see cref="CoinSelectionStrategy.SmallestFirst"/> spends small UTXOs first (more inputs, higher compute mass).
+    /// </param>
     public static BuiltTransaction BuildWithFeeRate(
         IReadOnlyList<KasWallet.UtxoEntry> availableUtxos,
         string destination,
@@ -96,7 +101,8 @@ public static partial class ConsensusTransactionFactory
         string? changeAddress,
         ReadOnlySpan<byte> privateKey,
         ulong feeRate = MassCalculator.MinimumFeeRate,
-        ulong? feeOverrideSompi = null)
+        ulong? feeOverrideSompi = null,
+        CoinSelectionStrategy coinSelection = CoinSelectionStrategy.LargestFirst)
     {
         if (availableUtxos is null)
             throw new ArgumentNullException(nameof(availableUtxos));
@@ -106,19 +112,22 @@ public static partial class ConsensusTransactionFactory
             throw new ArgumentException("Private key must be 32 bytes.", nameof(privateKey));
         if (amountSompi <= 0)
             throw new ArgumentOutOfRangeException(nameof(amountSompi));
+        if (!Enum.IsDefined(coinSelection))
+            throw new ArgumentOutOfRangeException(nameof(coinSelection), $"Unknown coin selection strategy {coinSelection}.");
         if (feeRate < MassCalculator.MinimumFeeRate)
             throw new ArgumentOutOfRangeException(nameof(feeRate), $"Fee rate {feeRate} is below the network minimum of {MassCalculator.MinimumFeeRate} sompi/gram.");
 
         var destinationScript = ScriptFor(destination);
         var changeScript = string.IsNullOrWhiteSpace(changeAddress) ? null : ScriptFor(changeAddress);
-        var sorted = availableUtxos.OrderByDescending(u => u.AmountSompi).ToList();
-        foreach (var u in sorted)
+        foreach (var u in availableUtxos)
         {
             if (u is null)
                 throw new ArgumentException("UTXO entry is null.", nameof(availableUtxos));
             if (u.AmountSompi < 0)
                 throw new ArgumentOutOfRangeException(nameof(availableUtxos), "UTXO amount must be >= 0.");
         }
+
+        var sorted = OrderForSelection(availableUtxos, coinSelection);
 
         var usable = sorted.Where(u => u.AmountSompi > 0).ToList();
         string failure = usable.Count == 0 ? "No spendable UTXOs." : "Insufficient funds.";
@@ -163,6 +172,20 @@ public static partial class ConsensusTransactionFactory
         }
 
         throw new InvalidOperationException(failure);
+    }
+
+    /// <summary>Stable order: by amount per strategy, then by outpoint so equal amounts are deterministic.</summary>
+    public static List<KasWallet.UtxoEntry> OrderForSelection(
+        IReadOnlyList<KasWallet.UtxoEntry> utxos,
+        CoinSelectionStrategy strategy)
+    {
+        var byAmount = strategy == CoinSelectionStrategy.SmallestFirst
+            ? utxos.OrderBy(u => u.AmountSompi)
+            : utxos.OrderByDescending(u => u.AmountSompi);
+        return byAmount
+            .ThenBy(u => u.TransactionId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(u => u.Index)
+            .ToList();
     }
 
     /// <summary>Unsigned transaction with 66-byte placeholder signature scripts (same size as real ones).</summary>
@@ -243,3 +266,13 @@ public static partial class ConsensusTransactionFactory
 
 /// <summary>A signed transaction together with its mass breakdown and fee.</summary>
 public sealed record BuiltTransaction(Transaction Transaction, TransactionMass Mass, ulong FeeRate, ulong FeeSompi, ulong ChangeSompi);
+
+/// <summary>Order in which <see cref="ConsensusTransactionFactory.BuildWithFeeRate"/> adds inputs.</summary>
+public enum CoinSelectionStrategy
+{
+    /// <summary>Largest UTXOs first: fewest inputs, lowest fee (default).</summary>
+    LargestFirst = 0,
+
+    /// <summary>Smallest UTXOs first: uses up small UTXOs, at the cost of more inputs and a higher fee.</summary>
+    SmallestFirst = 1,
+}

@@ -56,6 +56,7 @@ dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to
 dotnet run --project src/KasWallet.Cli -- send --from-key <hex或助记词> --to 'kaspatest:q...' --all --api https://api-tn10.kaspa.org/
 ```
 
+- `--coin-selection largest-first|smallest-first`：选币顺序，默认 `largest-first`（输入最少、手续费最低）。`smallest-first` 先花小额 UTXO，输入更多，compute mass 与手续费更高；不能与 `--all` 同用。stderr 会打印 `coin_selection=` 和 `inputs=`。
 - `--fee-rate`：sompi/gram，默认且不得低于 100（网络最低）。手续费 = 归一化最大质量 × 费率。
 - 质量取 compute、transient（归一化后为 2/字节）、storage（KIP-9，C = 10^12）三者的最大值；小额输出或过小的找零会使 storage mass 很大，手续费随之升高，超过标准上限 100000 时拒绝构建。
 - `--fee`：显式固定手续费（sompi），覆盖估算；若低于 mass × 费率会在输出中给出 warning。

@@ -238,6 +238,7 @@ var sendFee = new Option<long?>("--fee", "Fixed fee in sompi (overrides --fee-ra
 var sendFeeRate = new Option<ulong>("--fee-rate", () => MassCalculator.MinimumFeeRate, $"Fee rate in sompi per gram of mass (default and minimum {MassCalculator.MinimumFeeRate})");
 var sendApi = new Option<string?>("--api", $"REST base URL (default {KaspaRestClient.DefaultBaseUrl}, testnet-10 {KaspaRestClient.Testnet10BaseUrl})");
 var sendBroadcast = new Option<bool>("--broadcast", "POST the signed transaction. Omit to print JSON and not broadcast.");
+var sendCoinSelection = new Option<string>("--coin-selection", () => "largest-first", "Input order: largest-first (fewest inputs) or smallest-first (spend small UTXOs first). Not used with --all.");
 var sendCmd = new Command("send", "Build a signed payment with a mass-based fee. Dry-run unless --broadcast is set.");
 sendCmd.AddOption(sendFromKey);
 sendCmd.AddOption(sendTo);
@@ -247,9 +248,32 @@ sendCmd.AddOption(sendFee);
 sendCmd.AddOption(sendFeeRate);
 sendCmd.AddOption(sendApi);
 sendCmd.AddOption(sendBroadcast);
-sendCmd.SetHandler(async (string fromKey, string to, long? amount, bool all, long? fee, ulong feeRate, string? api, bool broadcast) =>
+sendCmd.AddOption(sendCoinSelection);
+sendCmd.SetHandler(async (System.CommandLine.Invocation.InvocationContext ctx) =>
 {
+    var r = ctx.ParseResult;
+    var fromKey = r.GetValueForOption(sendFromKey)!;
+    var to = r.GetValueForOption(sendTo)!;
+    var amount = r.GetValueForOption(sendAmount);
+    var all = r.GetValueForOption(sendAll);
+    var fee = r.GetValueForOption(sendFee);
+    var feeRate = r.GetValueForOption(sendFeeRate);
+    var api = r.GetValueForOption(sendApi);
+    var broadcast = r.GetValueForOption(sendBroadcast);
+    var coinSelection = r.GetValueForOption(sendCoinSelection);
     Warn();
+    CoinSelectionStrategy strategy;
+    try
+    {
+        strategy = SendCommand.ParseCoinSelection(coinSelection);
+    }
+    catch (ArgumentException ex)
+    {
+        Console.Error.WriteLine(ex.Message);
+        Environment.ExitCode = 1;
+        return;
+    }
+
     if (all == amount.HasValue)
     {
         Console.Error.WriteLine("Specify exactly one of --amount <sompi> or --all.");
@@ -258,11 +282,11 @@ sendCmd.SetHandler(async (string fromKey, string to, long? amount, bool all, lon
     }
 
     Environment.ExitCode = await SendCommand.RunAsync(
-        new SendOptions(fromKey, to, amount ?? 0, fee, feeRate, broadcast, ResolvePassphrase(null), all),
+        new SendOptions(fromKey, to, amount ?? 0, fee, feeRate, broadcast, ResolvePassphrase(null), all, strategy),
         api,
         Console.Out,
         Console.Error);
-}, sendFromKey, sendTo, sendAmount, sendAll, sendFee, sendFeeRate, sendApi, sendBroadcast);
+});
 root.AddCommand(sendCmd);
 
 return await root.InvokeAsync(args);
