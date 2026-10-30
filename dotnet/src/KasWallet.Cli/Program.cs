@@ -82,6 +82,38 @@ validateAlias.AddArgument(addrArgAlias);
 validateAlias.SetHandler(ValidateAddress, addrArgAlias);
 root.AddCommand(validateAlias);
 
+var batchAddrs = new Argument<string[]>("addresses", () => Array.Empty<string>(), "Kaspa addresses") { Arity = ArgumentArity.ZeroOrMore };
+var batchFile = new Option<FileInfo?>("--file", "Read addresses from a file, one per line ('#' comments allowed)");
+var batchNetwork = new Option<string?>("--network", "Require every address to be on this network (mainnet, testnet-10, devnet, simnet)");
+var validateBatchCmd = new Command("validate-batch", "Validate many Kaspa addresses offline and print a summary");
+validateBatchCmd.AddArgument(batchAddrs);
+validateBatchCmd.AddOption(batchFile);
+validateBatchCmd.AddOption(batchNetwork);
+validateBatchCmd.SetHandler((System.CommandLine.Invocation.InvocationContext ctx) =>
+{
+    var r = ctx.ParseResult;
+    var inputs = new List<string>(r.GetValueForArgument(batchAddrs));
+    var file = r.GetValueForOption(batchFile);
+    var netName = r.GetValueForOption(batchNetwork);
+    KaspaNetwork? expected = null;
+    try
+    {
+        if (netName is not null)
+            expected = ParseNetwork(netName);
+        if (file is not null)
+            inputs.AddRange(File.ReadAllLines(file.FullName));
+    }
+    catch (Exception ex) when (ex is ArgumentException or IOException)
+    {
+        Console.Error.WriteLine(ex.Message);
+        ctx.ExitCode = 1;
+        return;
+    }
+
+    ctx.ExitCode = ValidateBatchCommand.Run(inputs, expected, Console.Out);
+});
+root.AddCommand(validateBatchCmd);
+
 var balanceCmd = new Command("balance", "Query address balance via public REST API");
 var balanceAddress = new Argument<string>("address", "Kaspa address");
 balanceCmd.AddArgument(balanceAddress);

@@ -32,6 +32,8 @@ dotnet test
 ```bash
 dotnet run --project src/KasWallet.Cli -- networks
 dotnet run --project src/KasWallet.Cli -- validate 'kaspatest:q...'
+# Offline batch check; exit code 0 only if all are valid (and on --network, if given)
+dotnet run --project src/KasWallet.Cli -- validate-batch --network testnet-10 --file addresses.txt
 dotnet run --project src/KasWallet.Cli -- new-mnemonic --words 12
 dotnet run --project src/KasWallet.Cli -- address --index 0
 # mnemonic from --mnemonic or env KASWALLET_MNEMONIC; private keys are not printed
